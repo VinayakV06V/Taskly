@@ -1,0 +1,127 @@
+{
+  "users": [
+    {
+      "id": "usr-1792408832591-q23ix",
+      "name": "Jay Varshney",
+      "email": "varshneyjay00@gmail.com",
+      "passwordHash": "6e659deaa85842cdabb5c6305fcc40033ba43772ec00d45c2a3c921741a5e377",
+      "avatarUrl": "/src/assets/images/user_avatar_1792407645930.jpg",
+      "bio": "Focused on disciplined execution and daily habits.",
+      "createdAt": "2026-10-19T11:20:32.591Z",
+      "role": "ADMIN"
+    },
+    {
+      "id": "usr-guest-1792408915962",
+      "name": "Alex Rivera",
+      "email": "guest@taskpulse.io",
+      "passwordHash": "6b93ccba414ac1d0ae1e77f3fac560c748a6701ed6946735a49d463351518e16",
+      "avatarUrl": "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix&backgroundColor=ffd5dc",
+      "bio": "Productivity enthusiast",
+      "createdAt": "2026-10-19T11:21:55.962Z",
+      "role": "USER"
+    },
+    {
+      "id": "usr-1792410522797-bv39r",
+      "name": "Vinayak",
+      "email": "vinayakvarshney06@gmail.com",
+      "passwordHash": "9e8d680815c6a425448631b6733cca0cfd47581acf70ecdb8e22c0855d7cd401",
+      "avatarUrl": "/src/assets/images/user_avatar_1792407645930.jpg",
+      "bio": "Focused on disciplined execution and daily habits.",
+      "createdAt": "2026-10-19T11:48:42.797Z",
+      "role": "USER"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task-1792411590008-dl6b0",
+      "userId": "usr-1792410522797-bv39r",
+      "title": "study - Maths",
+      "description": "from notes and ppt",
+      "priority": "MEDIUM",
+      "category": "Academics",
+      "deadline": "2026-10-19T18:06:00",
+      "isCompleted": true,
+      "completedAt": "2026-10-19T12:06:00",
+      "createdAt": "2026-10-19T12:06:00",
+      "recurrence": {
+        "frequency": "NONE",
+        "interval": 1
+      }
+    }
+  ],
+  "habits": [],
+  "auditLogs": [
+    {
+      "id": "log-1792411692601-ywim",
+      "timestamp": "2026-10-19T12:08:12.601Z",
+      "type": "PROFILE_UPDATE",
+      "userId": "usr-guest-1792408915962",
+      "userName": "Alex Rivera",
+      "userEmail": "guest@taskpulse.io",
+      "ip": "127.0.0.1",
+      "details": "User updated profile settings",
+      "status": "INFO"
+    },
+    {
+      "id": "log-1792411684823-sd1f",
+      "timestamp": "2026-10-19T12:08:04.823Z",
+      "type": "LOGIN",
+      "userId": "usr-guest-1792408915962",
+      "userName": "Guest Explorer",
+      "userEmail": "guest@taskpulse.io",
+      "ip": "127.0.0.1",
+      "details": "Guest explorer demo session initiated",
+      "status": "INFO"
+    },
+    {
+      "id": "log-1792411598045-ijxp",
+      "timestamp": "2026-10-19T12:06:38.045Z",
+      "type": "TASK_TOGGLE",
+      "userId": "usr-1792410522797-bv39r",
+      "userName": "Vinayak",
+      "userEmail": "vinayakvarshney06@gmail.com",
+      "ip": "103.118.169.227",
+      "details": "Completed task \"study - Maths\"",
+      "status": "SUCCESS"
+    },
+    {
+      "id": "log-1792411590008-k3tu",
+      "timestamp": "2026-10-19T12:06:30.008Z",
+      "type": "TASK_CREATE",
+      "userId": "usr-1792410522797-bv39r",
+      "userName": "Vinayak",
+      "userEmail": "vinayakvarshney06@gmail.com",
+      "ip": "103.118.169.227",
+      "details": "Created task \"study - Maths\" [Priority: MEDIUM, Category: Academics]",
+      "status": "SUCCESS"
+    },
+    {
+      "id": "log-1792410870477-gi7y",
+      "timestamp": "2026-10-19T11:54:30.477Z",
+      "type": "LOGIN",
+      "userId": "usr-1792408832591-q23ix",
+      "userName": "Jay Varshney",
+      "userEmail": "varshneyjay00@gmail.com",
+      "ip": "127.0.0.1",
+      "details": "Admin signed in with Super Administrator privileges",
+      "status": "SUCCESS"
+    },
+    {
+      "id": "log-sys-boot",
+      "timestamp": "2026-10-19T11:54:17.487Z",
+      "type": "LOGIN",
+      "userId": "usr-1792408832591-q23ix",
+      "userName": "Jay Varshney",
+      "userEmail": "varshneyjay00@gmail.com",
+      "ip": "127.0.0.1 (System)",
+      "details": "Backend persistent database online and Admin Console active.",
+      "status": "SUCCESS"
+    }
+  ],
+  "tokens": {
+    "tok_6687b11e78a8fe26752a3cc9cd5111e1cc103e882f524288": "usr-1792408832591-q23ix",
+    "tok_57262b68c16def9fe1937cae560a8a2131cc3aeca1f8188d": "usr-1792410522797-bv39r",
+    "tok_944c72315d3769aae400dd305011d1b191e180cf88e515f6": "usr-1792408832591-q23ix",
+    "tok_da1535b600e6247be2c7456060734576158db46657713a59": "usr-guest-1792408915962"
+  }
+}
