@@ -1,7 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
-import { Plus, Check, Clock, AlertTriangle, Trash2, Calendar, CheckCircle2, ArrowRight } from 'lucide-react';
+import { 
+  Search, 
+  Plus, 
+  Check, 
+  Trash2, 
+  CheckCircle2, 
+  SlidersHorizontal 
+} from 'lucide-react';
 import { Task, SystemStatistics } from '../types';
+import { WebsiteCustomizationSettings } from './SettingsModal';
 
 interface DashboardOverviewProps {
   tasks: Task[];
@@ -11,6 +19,8 @@ interface DashboardOverviewProps {
   onSnoozeTask: (id: string, hours: number) => void;
   onOpenCreateModal: () => void;
   onNavigateToTasks: () => void;
+  selectedDateFilter?: string | null;
+  settings?: WebsiteCustomizationSettings;
 }
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
@@ -21,268 +31,309 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   onSnoozeTask,
   onOpenCreateModal,
   onNavigateToTasks,
+  selectedDateFilter,
+  settings,
 }) => {
-  const pendingTasks = tasks.filter((t) => !t.isCompleted);
+  const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
+  const [filterSearch, setFilterSearch] = useState('');
+
   const completedTasks = tasks.filter((t) => t.isCompleted);
+  const pendingTasks = tasks.filter((t) => !t.isCompleted);
 
-  const total = tasks.length;
-  const completedCount = completedTasks.length;
-  const pendingCount = pendingTasks.length;
-  const overdueCount = stats?.overdueTasks || 0;
-
-  const completedPercent = total > 0 ? Math.round((completedCount / total) * 100) : 0;
-  const inProgressPercent = total > 0 ? Math.round(((pendingCount - overdueCount) / total) * 100) : 0;
-  const overduePercent = total > 0 ? Math.round((overdueCount / total) * 100) : 0;
-
+  // Confetti on task complete (if enabled)
   const handleTaskCheckWithConfetti = (id: string, currentlyCompleted: boolean) => {
-    if (!currentlyCompleted) {
+    if (!currentlyCompleted && (settings?.enableConfetti ?? true)) {
       try {
         confetti({
-          particleCount: 45,
-          spread: 60,
-          origin: { y: 0.65 },
-          colors: ['#FF5E5E', '#10B981', '#3B82F6', '#F59E0B']
+          particleCount: 50,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#FF7243', '#2DD4BF', '#3754DB', '#65B741'],
         });
-      } catch (e) {
-        // Fallback gracefully
-      }
+      } catch {}
     }
     onToggleTask(id);
   };
 
-  // Helper for Circular SVG progress ring
-  const renderCircleRing = (percent: number, color: string, label: string) => {
-    const radius = 32;
-    const circumference = 2 * Math.PI * radius;
-    const strokeDashoffset = circumference - (Math.min(100, Math.max(0, percent)) / 100) * circumference;
+  // Filter tasks based on activeTab, search, and selectedDateFilter
+  const baseTasks = activeTab === 'active' ? pendingTasks : completedTasks;
 
+  const displayedTasks = baseTasks.filter((t) => {
+    if (selectedDateFilter) {
+      const taskDate = t.deadline ? t.deadline.split('T')[0] : '';
+      if (taskDate !== selectedDateFilter) return false;
+    }
+    if (!filterSearch.trim()) return true;
+    const q = filterSearch.toLowerCase();
     return (
-      <div className="flex flex-col items-center">
-        <div className="relative w-20 h-20 flex items-center justify-center">
-          <svg className="w-full h-full transform -rotate-90" viewBox="0 0 80 80">
-            <circle
-              cx="40"
-              cy="40"
-              r={radius}
-              stroke="#F1F5F9"
-              strokeWidth="7"
-              fill="transparent"
-            />
-            <circle
-              cx="40"
-              cy="40"
-              r={radius}
-              stroke={color}
-              strokeWidth="7"
-              strokeDasharray={circumference}
-              strokeDashoffset={strokeDashoffset}
-              strokeLinecap="round"
-              fill="transparent"
-              className="transition-all duration-700 ease-out"
-            />
-          </svg>
-          <span className="absolute font-bold text-sm text-slate-800 font-['Outfit',sans-serif]">
-            {percent}%
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5 mt-2 text-xs font-semibold text-slate-600">
-          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-          <span>{label}</span>
-        </div>
-      </div>
+      t.title.toLowerCase().includes(q) ||
+      t.description.toLowerCase().includes(q) ||
+      t.category.toLowerCase().includes(q)
     );
+  });
+
+  // Group tasks into Today vs Upcoming using local date calculation
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const todayDateKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+  const todayTasks = displayedTasks.filter((t) => {
+    if (!t.deadline) return true;
+    return t.deadline.split('T')[0] <= todayDateKey;
+  });
+
+  const tomorrowTasks = displayedTasks.filter((t) => {
+    if (!t.deadline) return false;
+    return t.deadline.split('T')[0] > todayDateKey;
+  });
+
+  // Category brand styles & colors
+  const getCategoryTheme = (category: string, index: number) => {
+    const c = category.toLowerCase();
+    if (c.includes('work') || c.includes('uber')) {
+      return { bg: 'bg-[#FF4A4A]', letter: 'U' };
+    }
+    if (c.includes('marketing') || c.includes('facebook') || c.includes('social')) {
+      return { bg: 'bg-[#3B5998]', letter: 'f' };
+    }
+    if (c.includes('finance') || c.includes('payoneer') || c.includes('bank')) {
+      return { bg: 'bg-[#6D28D9]', letter: 'P' };
+    }
+    if (c.includes('personal') || c.includes('upwork') || c.includes('dev')) {
+      return { bg: 'bg-[#10B981]', letter: 'up' };
+    }
+    const colors = [
+      { bg: 'bg-[#FF7243]', letter: 'T' },
+      { bg: 'bg-[#0D9488]', letter: 'K' },
+      { bg: 'bg-[#6366F1]', letter: 'M' },
+      { bg: 'bg-[#EC4899]', letter: 'S' },
+    ];
+    return colors[index % colors.length];
   };
 
-  return (
-    <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200/70">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left Column: To-Do Section (Matches Image 1) */}
-        <div className="lg:col-span-7 xl:col-span-8 space-y-4">
-          {/* Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-bold text-slate-900 font-['Outfit',sans-serif]">
-                To-Do
-              </span>
-              <span className="text-xs font-medium text-slate-400">
-                · {pendingTasks.length} active
-              </span>
-            </div>
+  const accent = settings?.accentColor || '#FF7243';
+  const showCompletedTab = settings ? settings.showCompletedTasks : true;
 
+  return (
+    <div className="bg-white rounded-[2rem] p-6 sm:p-8 shadow-xs border border-slate-200/60 space-y-6">
+      {/* Filter Tabs & In-List Actions (The two top feature cards from Image 1 were removed per request) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
+        <div className="flex items-center gap-6">
+          <button
+            onClick={() => setActiveTab('active')}
+            className={`pb-2 text-sm font-extrabold transition-all cursor-pointer border-b-2 font-['Outfit',sans-serif] ${
+              activeTab === 'active'
+                ? 'border-orange-500 text-slate-900'
+                : 'border-transparent text-slate-400 hover:text-slate-700'
+            }`}
+            style={activeTab === 'active' ? { borderColor: accent, color: accent } : undefined}
+          >
+            Active Tasks ({pendingTasks.length})
+          </button>
+
+          {showCompletedTab && (
             <button
-              onClick={onOpenCreateModal}
-              className="flex items-center gap-1 text-xs font-bold text-[#FF5E5E] hover:text-[#FF4545] btn-press cursor-pointer"
+              onClick={() => setActiveTab('completed')}
+              className={`pb-2 text-sm font-extrabold transition-all cursor-pointer border-b-2 font-['Outfit',sans-serif] ${
+                activeTab === 'completed'
+                  ? 'border-orange-500 text-slate-900'
+                  : 'border-transparent text-slate-400 hover:text-slate-700'
+              }`}
+              style={activeTab === 'completed' ? { borderColor: accent, color: accent } : undefined}
             >
-              <Plus className="w-3.5 h-3.5 stroke-[3]" />
-              <span>Add Task</span>
+              Completed ({completedTasks.length})
             </button>
+          )}
+        </div>
+
+        {/* Right Search Bar & Add Button */}
+        <div className="flex items-center gap-2.5">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <input
+              type="text"
+              value={filterSearch}
+              onChange={(e) => setFilterSearch(e.target.value)}
+              placeholder="Search tasks..."
+              className="bg-[#FAF7F2] border border-slate-200/80 rounded-full pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 outline-none focus:border-orange-500 font-medium"
+            />
           </div>
 
-          {/* Task Card List */}
-          <div className="space-y-3">
-            {pendingTasks.length === 0 ? (
-              <div className="py-12 text-center border-2 border-dashed border-slate-100 rounded-2xl">
-                <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-2.5 opacity-80" />
-                <h3 className="text-sm font-bold text-slate-800">Your To-Do queue is empty</h3>
-                <p className="text-xs text-slate-400 max-w-xs mx-auto mt-1 mb-4">
-                  Add tasks whenever you want to track projects, priorities, and deadlines.
-                </p>
-                <button
-                  onClick={onOpenCreateModal}
-                  className="px-4 py-2 text-xs font-bold text-white bg-[#FF5E5E] hover:bg-[#FF4545] rounded-full shadow-sm btn-press cursor-pointer"
-                >
-                  + Add First Task
-                </button>
-              </div>
-            ) : (
-              pendingTasks.slice(0, 5).map((task) => {
-                const deadlineDate = new Date(task.deadline);
-                const isOverdue = deadlineDate.getTime() < Date.now();
+          <button
+            onClick={onOpenCreateModal}
+            className="flex items-center gap-1 text-xs font-bold text-white px-3.5 py-1.5 rounded-full shadow-xs btn-press cursor-pointer font-['Outfit',sans-serif]"
+            style={{ backgroundColor: accent }}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Task</span>
+          </button>
+        </div>
+      </div>
 
-                return (
-                  <div
-                    key={task.id}
-                    className="p-4 rounded-2xl bg-[#F8FAFD] border border-slate-100 card-press hover:border-slate-200 group"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3 flex-1 min-w-0">
-                        {/* Circle Radio-style check toggle (Matches Image 1) */}
-                        <button
-                          onClick={() => handleTaskCheckWithConfetti(task.id, task.isCompleted)}
-                          className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center btn-press shrink-0 cursor-pointer ${
-                            task.isCompleted
-                              ? 'bg-emerald-500 border-emerald-500 text-white'
-                              : isOverdue
-                              ? 'border-rose-400 hover:border-rose-500 bg-white'
-                              : 'border-[#FF5E5E] hover:border-[#FF4545] bg-white'
-                          }`}
-                        >
-                          {task.isCompleted && <Check className="w-3 h-3 stroke-[3]" />}
-                        </button>
-
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-sm font-bold text-slate-900 tracking-tight truncate group-hover:text-[#FF5E5E] transition-colors">
-                            {task.title}
-                          </h4>
-                          {task.description && (
-                            <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
-                              {task.description}
-                            </p>
-                          )}
-
-                          {/* Metadata row */}
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400 mt-2 font-medium">
-                            <span className={`font-semibold ${
-                              task.priority === 'HIGH' ? 'text-rose-500' : task.priority === 'MEDIUM' ? 'text-amber-500' : 'text-blue-500'
-                            }`}>
-                              Priority: {task.priority}
-                            </span>
-                            <span>·</span>
-                            <span className="bg-slate-200/60 text-slate-700 px-2 py-0.5 rounded-md text-[10px] font-semibold">
-                              {task.category}
-                            </span>
-                            <span>·</span>
-                            <span className={isOverdue ? 'text-rose-500 font-bold' : 'text-slate-500'}>
-                              {isOverdue ? 'Overdue!' : `Due ${deadlineDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right: Quick actions */}
-                      <div className="flex items-center gap-1 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => onSnoozeTask(task.id, 24)}
-                          className="px-2 py-1 text-[10px] font-mono font-medium text-slate-500 hover:text-slate-900 bg-white border border-slate-200 rounded-lg btn-press cursor-pointer"
-                          title="Snooze deadline +24 hours"
-                        >
-                          +24h
-                        </button>
-                        <button
-                          onClick={() => onDeleteTask(task.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-white btn-press cursor-pointer"
-                          title="Delete task"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-
-            {pendingTasks.length > 5 && (
+      {/* Task List Grouped by Timeline */}
+      <div className="space-y-6">
+        {displayedTasks.length === 0 ? (
+          <div className="py-16 text-center border-2 border-dashed border-slate-100 rounded-3xl">
+            <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto mb-2 opacity-80" />
+            <h4 className="text-sm font-bold text-slate-800 font-['Outfit',sans-serif]">
+              {activeTab === 'active' ? 'Your task queue is clear' : 'No completed tasks found'}
+            </h4>
+            <p className="text-xs text-slate-400 max-w-xs mx-auto mt-1 mb-4">
+              {activeTab === 'active'
+                ? 'Tasks you add will be tracked and displayed here with live progress statistics.'
+                : 'Completed tasks will appear here once you check off finished items.'}
+            </p>
+            {activeTab === 'active' && (
               <button
-                onClick={onNavigateToTasks}
-                className="w-full py-2.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-[#F8FAFD] hover:bg-slate-100 rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer btn-press"
+                onClick={onOpenCreateModal}
+                className="px-4 py-2 text-xs font-bold text-white rounded-full shadow-sm btn-press cursor-pointer font-['Outfit',sans-serif]"
+                style={{ backgroundColor: accent }}
               >
-                <span>View all {pendingTasks.length} tasks</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                + Add First Task
               </button>
             )}
           </div>
-        </div>
+        ) : (
+          <>
+            {/* Today Group */}
+            {todayTasks.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs font-extrabold text-slate-400 uppercase tracking-wider font-mono">
+                  <span>Today</span>
+                  <span>{todayTasks.length} task{todayTasks.length > 1 ? 's' : ''}</span>
+                </div>
 
-        {/* Right Column: Task Status & Completed Tasks (Matches Image 1) */}
-        <div className="lg:col-span-5 xl:col-span-4 space-y-6">
-          {/* Circular Rings Box (Matches Image 1) */}
-          <div className="p-5 rounded-2xl bg-[#F8FAFD] border border-slate-100">
-            <h3 className="text-sm font-bold text-slate-900 mb-4 font-['Outfit',sans-serif]">
-              Task Status
-            </h3>
+                <div className="space-y-2.5">
+                  {todayTasks.map((task, idx) => {
+                    const theme = getCategoryTheme(task.category, idx);
+                    const isOverdue = task.deadline && new Date(task.deadline).getTime() < Date.now();
 
-            <div className="grid grid-cols-3 gap-2">
-              {renderCircleRing(completedPercent, '#10B981', 'Completed')}
-              {renderCircleRing(inProgressPercent, '#3B82F6', 'In Progress')}
-              {renderCircleRing(overduePercent, '#FF5E5E', 'Overdue')}
-            </div>
-          </div>
+                    return (
+                      <div
+                        key={task.id}
+                        className="p-3.5 sm:p-4 rounded-2xl bg-[#FAF8F5]/80 hover:bg-[#FAF8F5] border border-slate-200/50 flex items-center justify-between gap-3 transition-all card-press group"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                          {/* Colored Brand Square Icon */}
+                          <div
+                            className={`w-11 h-11 rounded-2xl ${theme.bg} text-white flex items-center justify-center font-black text-sm shadow-xs shrink-0 font-['Outfit',sans-serif]`}
+                          >
+                            {theme.letter}
+                          </div>
 
-          {/* Completed Tasks Box (Matches Image 1) */}
-          <div className="p-5 rounded-2xl bg-[#F8FAFD] border border-slate-100">
-            <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200/60">
-              <h3 className="text-sm font-bold text-slate-900 font-['Outfit',sans-serif]">
-                Completed Tasks
-              </h3>
-              <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                {completedTasks.length} done
-              </span>
-            </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <h4 className={`text-sm font-extrabold tracking-tight truncate font-['Outfit',sans-serif] ${
+                                task.isCompleted ? 'line-through text-slate-400' : 'text-slate-900 group-hover:text-orange-500'
+                              }`}>
+                                {task.title}
+                              </h4>
+                              {isOverdue && !task.isCompleted && (
+                                <span className="text-[10px] font-mono font-bold text-rose-500 bg-rose-50 px-2 py-0.2 rounded-md">
+                                  Overdue
+                                </span>
+                              )}
+                            </div>
 
-            <div className="space-y-2.5">
-              {completedTasks.length === 0 ? (
-                <p className="text-xs text-slate-400 py-4 text-center">
-                  No completed tasks yet. Finish a task above to celebrate!
-                </p>
-              ) : (
-                completedTasks.slice(0, 4).map((ct) => (
-                  <div
-                    key={ct.id}
-                    className="p-3 bg-white rounded-xl border border-slate-100 flex items-center justify-between gap-2 shadow-2xs"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
-                        <Check className="w-3 h-3 stroke-[3]" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs font-semibold text-slate-800 line-through truncate">
-                          {ct.title}
+                            <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
+                              {task.description || `${task.category} task`}
+                            </p>
+                          </div>
                         </div>
-                        <div className="text-[10px] text-slate-400">
-                          {ct.category}
+
+                        {/* Right Actions & Complete Checkbox */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => onSnoozeTask(task.id, 24)}
+                            className="hidden sm:inline-flex px-2 py-1 text-[10px] font-mono font-semibold text-slate-400 hover:text-slate-700 bg-white border border-slate-200/80 rounded-lg btn-press cursor-pointer"
+                            title="Snooze deadline +24h"
+                          >
+                            +24h
+                          </button>
+
+                          <button
+                            onClick={() => onDeleteTask(task.id)}
+                            className="p-1.5 text-slate-300 hover:text-rose-500 rounded-lg hover:bg-white transition-colors cursor-pointer"
+                            title="Delete task"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Round Radio Check Toggle */}
+                          <button
+                            onClick={() => handleTaskCheckWithConfetti(task.id, task.isCompleted)}
+                            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all btn-press cursor-pointer ${
+                              task.isCompleted
+                                ? 'bg-emerald-500 border-emerald-500 text-white'
+                                : 'border-slate-300 hover:border-orange-500 bg-white'
+                            }`}
+                            title={task.isCompleted ? 'Mark uncompleted' : 'Mark completed'}
+                          >
+                            {task.isCompleted && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                          </button>
                         </div>
                       </div>
-                    </div>
-                    <span className="text-[10px] font-mono text-emerald-600 font-semibold shrink-0">
-                      Completed
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Tomorrow / Upcoming Group */}
+            {tomorrowTasks.length > 0 && (
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between text-xs font-extrabold text-slate-400 uppercase tracking-wider font-mono">
+                  <span>Upcoming</span>
+                  <span>{tomorrowTasks.length} task{tomorrowTasks.length > 1 ? 's' : ''}</span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {tomorrowTasks.map((task, idx) => {
+                    const theme = getCategoryTheme(task.category, idx + 2);
+                    return (
+                      <div
+                        key={task.id}
+                        className="p-3.5 sm:p-4 rounded-2xl bg-[#FAF8F5]/80 hover:bg-[#FAF8F5] border border-slate-200/50 flex items-center justify-between gap-3 transition-all card-press group"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                          <div
+                            className={`w-11 h-11 rounded-2xl ${theme.bg} text-white flex items-center justify-center font-black text-sm shadow-xs shrink-0 font-['Outfit',sans-serif]`}
+                          >
+                            {theme.letter}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <h4 className={`text-sm font-extrabold tracking-tight truncate font-['Outfit',sans-serif] ${
+                              task.isCompleted ? 'line-through text-slate-400' : 'text-slate-900 group-hover:text-orange-500'
+                            }`}>
+                              {task.title}
+                            </h4>
+                            <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
+                              {task.description || `${task.category} task`}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => handleTaskCheckWithConfetti(task.id, task.isCompleted)}
+                            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all btn-press cursor-pointer ${
+                              task.isCompleted
+                                ? 'bg-emerald-500 border-emerald-500 text-white'
+                                : 'border-slate-300 hover:border-orange-500 bg-white'
+                            }`}
+                          >
+                            {task.isCompleted && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

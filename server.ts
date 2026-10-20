@@ -396,7 +396,7 @@ async function startServer() {
         email: 'guest@taskpulse.io',
         passwordHash: hashPassword('guest123'),
         avatarUrl: '/src/assets/images/user_avatar_1792407645930.jpg',
-        bio: 'Exploring TaskPulse workspace.',
+        bio: 'Exploring Taskly workspace.',
         role: 'USER',
         createdAt: new Date().toISOString()
       };
@@ -1085,7 +1085,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`TaskPulse Server running at http://0.0.0.0:${PORT}`);
+    console.log(`Taskly Server running at http://0.0.0.0:${PORT}`);
   });
 }
 

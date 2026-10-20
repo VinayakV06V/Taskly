@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, Lock, User as UserIcon, ArrowRight, X, AlertCircle, Sparkles } from 'lucide-react';
 import { User } from '../types';
+import { TasklyLogo } from './TasklyLogo';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -96,11 +97,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Brand Kicker */}
         <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-[#FF5E5E] flex items-center justify-center font-bold text-white text-base shadow-lg shadow-[#FF5E5E]/30 mx-auto mb-3">
-            TP
+          <div className="flex justify-center mb-3">
+            <TasklyLogo size="xl" showText={false} />
           </div>
           <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 font-['Outfit',sans-serif]">
-            {mode === 'signin' ? 'Sign in to TaskPulse' : 'Create TaskPulse Account'}
+            {mode === 'signin' ? 'Sign in to Taskly' : 'Create Taskly Account'}
           </h2>
           <p className="text-xs text-slate-500 mt-1">
             {mode === 'signin'

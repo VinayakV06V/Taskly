@@ -99,6 +99,15 @@ export interface OverdueAlert {
 
 export type ViewTab = 'dashboard' | 'tasks' | 'kanban' | 'habits' | 'analytics' | 'alerts';
 
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  type: 'success' | 'alert' | 'info';
+}
+
 // Audit types (for server compatibility)
 export type AuditEventType = string;
 

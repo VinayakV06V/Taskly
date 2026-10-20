@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ViewTab, Task, Habit, SystemStatistics, OverdueAlert, Priority, RecurrenceFrequency, User } from './types';
+import { ViewTab, Task, Habit, SystemStatistics, OverdueAlert, Priority, RecurrenceFrequency, User, AppNotification } from './types';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
+import { RightPanel } from './components/RightPanel';
 import { DashboardOverview } from './components/DashboardOverview';
 import { KanbanBoard } from './components/KanbanBoard';
 import { TaskBoard } from './components/TaskBoard';
@@ -12,6 +13,8 @@ import { CreateTaskModal } from './components/CreateTaskModal';
 import { CreateHabitModal } from './components/CreateHabitModal';
 import { AuthModal } from './components/AuthModal';
 import { ProfileModal } from './components/ProfileModal';
+import { SettingsModal, WebsiteCustomizationSettings, DEFAULT_CUSTOM_SETTINGS } from './components/SettingsModal';
+import { UserAlarm } from './components/ClockAlarmWidget';
 import { X } from 'lucide-react';
 
 export default function App() {
@@ -25,10 +28,25 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [selectedDateFilter, setSelectedDateFilter] = useState<string | null>(null);
+
+  // Customization Settings State
+  const [customSettings, setCustomSettings] = useState<WebsiteCustomizationSettings>(() => {
+    try {
+      const saved = localStorage.getItem('taskly_custom_settings');
+      return saved ? { ...DEFAULT_CUSTOM_SETTINGS, ...JSON.parse(saved) } : DEFAULT_CUSTOM_SETTINGS;
+    } catch {
+      return DEFAULT_CUSTOM_SETTINGS;
+    }
+  });
+
+  // Notifications State: STRICTLY NO PRIOR NOTIFICATIONS! Empty array initially.
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   // Modals state
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
 
@@ -40,6 +58,53 @@ export default function App() {
     setTimeout(() => {
       setToast(null);
     }, 3200);
+  };
+
+  // Add Notification function (called only when send or receive)
+  const addNotification = useCallback((title: string, message: string, type: 'success' | 'alert' | 'info' = 'info') => {
+    const newNotif: AppNotification = {
+      id: 'notif-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      title,
+      message,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      read: false,
+      type,
+    };
+    setNotifications((prev) => [newNotif, ...prev]);
+  }, []);
+
+  const handleMarkAllNotificationsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
+  const handleClearNotifications = () => {
+    setNotifications([]);
+  };
+
+  const handleDismissNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const handleSendTestNotification = () => {
+    addNotification(
+      'Task Reminder',
+      'Reminder alert: Time to review project milestones and daily tasks.',
+      'info'
+    );
+    showToast('New reminder notification received', 'info');
+  };
+
+  const handleAlarmTriggered = (alarm: UserAlarm) => {
+    addNotification('⏰ Alarm Triggered', `Reminder: ${alarm.label} at ${alarm.time}`, 'alert');
+    showToast(`⏰ Alarm: ${alarm.label} (${alarm.time})`, 'alert');
+  };
+
+  const handleSaveCustomSettings = (newSettings: WebsiteCustomizationSettings) => {
+    setCustomSettings(newSettings);
+    try {
+      localStorage.setItem('taskly_custom_settings', JSON.stringify(newSettings));
+    } catch {}
+    showToast('Custom settings applied', 'success');
   };
 
   const getAuthHeaders = useCallback(() => {
@@ -169,6 +234,7 @@ export default function App() {
     setStats(null);
     setAlerts([]);
     setIsProfileModalOpen(false);
+    setIsSettingsModalOpen(false);
     setIsAuthModalOpen(true);
     showToast('You have been logged out', 'info');
   };
@@ -185,6 +251,7 @@ export default function App() {
         const data = await res.json();
         setUser(data.user);
         showToast('Profile & avatar updated successfully', 'success');
+        addNotification('Profile Updated', 'Your profile details and avatar were saved.', 'success');
       }
     } catch (err) {
       console.error('Profile update failed:', err);
@@ -220,8 +287,14 @@ export default function App() {
       if (data.success) {
         if (data.spawnedTask) {
           showToast(`Completed! Spawned next recurring task: "${data.spawnedTask.title}"`, 'success');
+          addNotification('Recurring Task Spawned', `Next cycle generated for "${data.spawnedTask.title}".`, 'info');
         } else {
           showToast(data.task.isCompleted ? 'Task completed 🎉' : 'Task marked active', 'info');
+          if (data.task.isCompleted) {
+            addNotification('Task Completed', `"${data.task.title}" was marked as completed!`, 'success');
+          } else {
+            addNotification('Task Re-opened', `"${data.task.title}" moved back to active sprint.`, 'info');
+          }
         }
         fetchData();
       }
@@ -233,6 +306,7 @@ export default function App() {
 
   const handleDeleteTask = async (id: string) => {
     if (!token) return;
+    const taskToDelete = tasks.find((t) => t.id === id);
     setTasks((prev) => prev.filter((t) => t.id !== id));
     try {
       const res = await fetch(`/api/tasks/${id}`, {
@@ -241,6 +315,9 @@ export default function App() {
       });
       if (res.ok) {
         showToast('Task removed from queue', 'info');
+        if (taskToDelete) {
+          addNotification('Task Removed', `"${taskToDelete.title}" was removed from your queue.`, 'info');
+        }
         fetchData();
       }
     } catch (err) {
@@ -251,6 +328,7 @@ export default function App() {
 
   const handleSnoozeTask = async (id: string, hours: number) => {
     if (!token) return;
+    const task = tasks.find((t) => t.id === id);
     try {
       const res = await fetch(`/api/tasks/${id}/snooze`, {
         method: 'POST',
@@ -259,6 +337,9 @@ export default function App() {
       });
       if (res.ok) {
         showToast(`Deadline extended by +${hours} hours`, 'success');
+        if (task) {
+          addNotification('Task Postponed', `"${task.title}" deadline extended +${hours}h.`, 'info');
+        }
         fetchData();
       }
     } catch (err) {
@@ -291,6 +372,7 @@ export default function App() {
       const data = await res.json();
       if (data.success) {
         showToast(`Added task: "${data.task.title}"`, 'success');
+        addNotification('New Task Created', `"${data.task.title}" added to your sprint queue.`, 'success');
         fetchData();
       } else {
         showToast(data.error || 'Failed to add task', 'alert');
@@ -328,6 +410,8 @@ export default function App() {
       return;
     }
 
+    const targetHabit = habits.find((h) => h.id === habitId);
+
     setHabits((prev) =>
       prev.map((h) => {
         if (h.id === habitId) {
@@ -352,6 +436,9 @@ export default function App() {
       const data = await res.json();
       if (data.success) {
         showToast('Habit check-in recorded 🔥', 'success');
+        if (targetHabit) {
+          addNotification('Habit Check-in', `Streak updated for habit "${targetHabit.title}".`, 'success');
+        }
         fetchData();
       }
     } catch (err) {
@@ -399,6 +486,7 @@ export default function App() {
       const data = await res.json();
       if (data.success) {
         showToast(`Added habit: "${data.habit.title}"`, 'success');
+        addNotification('New Habit Formed', `"${data.habit.title}" added to daily routine.`, 'success');
         fetchData();
       }
     } catch (err) {
@@ -407,8 +495,11 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F4F6FA] text-slate-800 flex flex-row font-['Plus_Jakarta_Sans',sans-serif]">
-      {/* Desktop Persistent Sidebar */}
+    <div
+      className="min-h-screen text-slate-800 flex flex-row font-['Plus_Jakarta_Sans',sans-serif] transition-colors duration-300"
+      style={{ backgroundColor: customSettings.backgroundColor }}
+    >
+      {/* Desktop Persistent White Sidebar */}
       <Sidebar
         currentTab={currentTab}
         onSelectTab={(tab) => {
@@ -416,9 +507,11 @@ export default function App() {
           setMobileMenuOpen(false);
         }}
         onOpenProfile={() => setIsProfileModalOpen(true)}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
         onLogout={handleLogout}
         user={user}
         overdueCount={alerts.length}
+        settings={customSettings}
       />
 
       {/* Mobile Sidebar Overlay Drawer */}
@@ -445,12 +538,17 @@ export default function App() {
                 setIsProfileModalOpen(true);
                 setMobileMenuOpen(false);
               }}
+              onOpenSettings={() => {
+                setIsSettingsModalOpen(true);
+                setMobileMenuOpen(false);
+              }}
               onLogout={() => {
                 handleLogout();
                 setMobileMenuOpen(false);
               }}
               user={user}
               overdueCount={alerts.length}
+              settings={customSettings}
             />
           </div>
         </div>
@@ -471,69 +569,160 @@ export default function App() {
             }
           }}
           onOpenProfile={() => setIsProfileModalOpen(true)}
+          onOpenSettings={() => setIsSettingsModalOpen(true)}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
+          notifications={notifications}
+          onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+          onClearNotifications={handleClearNotifications}
+          onSendTestNotification={handleSendTestNotification}
+          onDismissNotification={handleDismissNotification}
+          settings={customSettings}
         />
 
         {/* Viewport Content */}
-        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-4 sm:py-6 max-w-7xl w-full mx-auto">
+        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-3 sm:py-5 max-w-[1700px] w-full mx-auto">
           {loading ? (
             <div className="py-24 text-center">
-              <div className="inline-block w-8 h-8 border-3 border-[#FF5E5E] border-t-transparent rounded-full animate-spin mb-3" />
+              <div
+                className="inline-block w-8 h-8 border-3 border-t-transparent rounded-full animate-spin mb-3"
+                style={{ borderColor: customSettings.accentColor, borderTopColor: 'transparent' }}
+              />
               <p className="text-xs text-slate-500 font-medium">Loading workspace...</p>
             </div>
           ) : (
             <>
               {currentTab === 'dashboard' && (
-                <DashboardOverview
-                  tasks={filteredTasks}
-                  stats={stats}
-                  onToggleTask={handleToggleTask}
-                  onDeleteTask={handleDeleteTask}
-                  onSnoozeTask={handleSnoozeTask}
-                  onOpenCreateModal={() => {
-                    if (!user) setIsAuthModalOpen(true);
-                    else setIsTaskModalOpen(true);
-                  }}
-                  onNavigateToTasks={() => setCurrentTab('tasks')}
-                />
+                <div className="flex flex-col xl:flex-row items-start gap-6 w-full">
+                  {/* Center Panel */}
+                  <div className="flex-1 min-w-0 w-full">
+                    <DashboardOverview
+                      tasks={filteredTasks}
+                      stats={stats}
+                      onToggleTask={handleToggleTask}
+                      onDeleteTask={handleDeleteTask}
+                      onSnoozeTask={handleSnoozeTask}
+                      onOpenCreateModal={() => {
+                        if (!user) setIsAuthModalOpen(true);
+                        else setIsTaskModalOpen(true);
+                      }}
+                      onNavigateToTasks={() => setCurrentTab('tasks')}
+                      selectedDateFilter={selectedDateFilter}
+                      settings={customSettings}
+                    />
+                  </div>
+
+                  {/* Right Rail Panel */}
+                  <RightPanel
+                    user={user}
+                    tasks={tasks}
+                    stats={stats}
+                    notifications={notifications}
+                    onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+                    onClearNotifications={handleClearNotifications}
+                    onSendTestNotification={handleSendTestNotification}
+                    onDismissNotification={handleDismissNotification}
+                    onOpenProfile={() => setIsProfileModalOpen(true)}
+                    onSelectDateFilter={setSelectedDateFilter}
+                    selectedDateFilter={selectedDateFilter}
+                    onAlarmTriggered={handleAlarmTriggered}
+                    settings={customSettings}
+                  />
+                </div>
               )}
 
               {currentTab === 'kanban' && (
-                <KanbanBoard
-                  tasks={filteredTasks}
-                  onToggleTask={handleToggleTask}
-                  onDeleteTask={handleDeleteTask}
-                  onOpenCreateModal={() => {
-                    if (!user) setIsAuthModalOpen(true);
-                    else setIsTaskModalOpen(true);
-                  }}
-                />
+                <div className="flex flex-col xl:flex-row items-start gap-6 w-full">
+                  <div className="flex-1 min-w-0 w-full">
+                    <KanbanBoard
+                      tasks={filteredTasks}
+                      onToggleTask={handleToggleTask}
+                      onDeleteTask={handleDeleteTask}
+                      onOpenCreateModal={() => {
+                        if (!user) setIsAuthModalOpen(true);
+                        else setIsTaskModalOpen(true);
+                      }}
+                    />
+                  </div>
+                  <RightPanel
+                    user={user}
+                    tasks={tasks}
+                    stats={stats}
+                    notifications={notifications}
+                    onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+                    onClearNotifications={handleClearNotifications}
+                    onSendTestNotification={handleSendTestNotification}
+                    onDismissNotification={handleDismissNotification}
+                    onOpenProfile={() => setIsProfileModalOpen(true)}
+                    onSelectDateFilter={setSelectedDateFilter}
+                    selectedDateFilter={selectedDateFilter}
+                    onAlarmTriggered={handleAlarmTriggered}
+                    settings={customSettings}
+                  />
+                </div>
               )}
 
               {currentTab === 'tasks' && (
-                <TaskBoard
-                  tasks={filteredTasks}
-                  onToggleTask={handleToggleTask}
-                  onDeleteTask={handleDeleteTask}
-                  onSnoozeTask={handleSnoozeTask}
-                  onOpenCreateModal={() => {
-                    if (!user) setIsAuthModalOpen(true);
-                    else setIsTaskModalOpen(true);
-                  }}
-                  onQuickAddTask={handleQuickAddTask}
-                />
+                <div className="flex flex-col xl:flex-row items-start gap-6 w-full">
+                  <div className="flex-1 min-w-0 w-full">
+                    <TaskBoard
+                      tasks={filteredTasks}
+                      onToggleTask={handleToggleTask}
+                      onDeleteTask={handleDeleteTask}
+                      onSnoozeTask={handleSnoozeTask}
+                      onOpenCreateModal={() => {
+                        if (!user) setIsAuthModalOpen(true);
+                        else setIsTaskModalOpen(true);
+                      }}
+                      onQuickAddTask={handleQuickAddTask}
+                    />
+                  </div>
+                  <RightPanel
+                    user={user}
+                    tasks={tasks}
+                    stats={stats}
+                    notifications={notifications}
+                    onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+                    onClearNotifications={handleClearNotifications}
+                    onSendTestNotification={handleSendTestNotification}
+                    onDismissNotification={handleDismissNotification}
+                    onOpenProfile={() => setIsProfileModalOpen(true)}
+                    onSelectDateFilter={setSelectedDateFilter}
+                    selectedDateFilter={selectedDateFilter}
+                    onAlarmTriggered={handleAlarmTriggered}
+                    settings={customSettings}
+                  />
+                </div>
               )}
 
               {currentTab === 'habits' && (
-                <HabitTrackerView
-                  habits={habits}
-                  onToggleHabitDate={handleToggleHabitDate}
-                  onDeleteHabit={handleDeleteHabit}
-                  onOpenCreateHabitModal={() => {
-                    if (!user) setIsAuthModalOpen(true);
-                    else setIsHabitModalOpen(true);
-                  }}
-                />
+                <div className="flex flex-col xl:flex-row items-start gap-6 w-full">
+                  <div className="flex-1 min-w-0 w-full">
+                    <HabitTrackerView
+                      habits={habits}
+                      onToggleHabitDate={handleToggleHabitDate}
+                      onDeleteHabit={handleDeleteHabit}
+                      onOpenCreateHabitModal={() => {
+                        if (!user) setIsAuthModalOpen(true);
+                        else setIsHabitModalOpen(true);
+                      }}
+                    />
+                  </div>
+                  <RightPanel
+                    user={user}
+                    tasks={tasks}
+                    stats={stats}
+                    notifications={notifications}
+                    onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+                    onClearNotifications={handleClearNotifications}
+                    onSendTestNotification={handleSendTestNotification}
+                    onDismissNotification={handleDismissNotification}
+                    onOpenProfile={() => setIsProfileModalOpen(true)}
+                    onSelectDateFilter={setSelectedDateFilter}
+                    selectedDateFilter={selectedDateFilter}
+                    onAlarmTriggered={handleAlarmTriggered}
+                    settings={customSettings}
+                  />
+                </div>
               )}
 
               {currentTab === 'analytics' && (
@@ -552,11 +741,11 @@ export default function App() {
           )}
         </main>
 
-        {/* Clean Footer */}
-        <footer className="py-4 px-6 text-center text-xs text-slate-400 border-t border-slate-200/60 mt-auto">
+        {/* Clean Minimalist Footer */}
+        <footer className="py-4 px-6 text-center text-xs text-slate-400 border-t border-slate-200/50 mt-auto">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-            <span className="font-semibold text-slate-600 font-['Outfit',sans-serif]">
-              TaskPulse · Smart Task &amp; Habit Workspace
+            <span className="font-bold text-slate-600 font-['Outfit',sans-serif]">
+              {customSettings.workspaceName} · Smart Task &amp; Habit Workspace
             </span>
             <span className="text-[11px] text-slate-400">
               Personal Productivity &amp; Priority Management
@@ -564,6 +753,21 @@ export default function App() {
           </div>
         </footer>
       </div>
+
+      {/* Floating Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-3 duration-200">
+          <div className={`px-4 py-2.5 rounded-2xl shadow-xl border text-xs font-bold flex items-center gap-2 ${
+            toast.type === 'alert'
+              ? 'bg-rose-50 text-rose-700 border-rose-200'
+              : toast.type === 'info'
+              ? 'bg-slate-900 text-white border-slate-800'
+              : 'bg-emerald-600 text-white border-emerald-500'
+          }`}>
+            <span>{toast.message}</span>
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       <AuthModal
@@ -582,6 +786,13 @@ export default function App() {
         onLogout={handleLogout}
       />
 
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        settings={customSettings}
+        onSaveSettings={handleSaveCustomSettings}
+      />
+
       <CreateTaskModal
         isOpen={isTaskModalOpen}
         onClose={() => setIsTaskModalOpen(false)}
@@ -593,22 +804,6 @@ export default function App() {
         onClose={() => setIsHabitModalOpen(false)}
         onCreate={handleCreateHabit}
       />
-
-      {/* Subtle Tactile Toast Feedback */}
-      {toast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl border text-xs font-semibold shadow-xl backdrop-blur-md bg-white/95 border-slate-200 text-slate-800 card-press animate-check-pop">
-          <span
-            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-              toast.type === 'alert'
-                ? 'bg-rose-500'
-                : toast.type === 'info'
-                ? 'bg-blue-500'
-                : 'bg-emerald-500'
-            }`}
-          />
-          <span>{toast.message}</span>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 {
   "name": "TaskPulse Workspace",
-  "description": "Production-grade task and recurring habit tracking system featuring priority management, profile avatar customization, Kanban workflow, and completion statistics.",
+  "description": "Taskly: Production-grade task and recurring habit tracking system featuring priority management, profile avatar customization, Kanban workflow, and completion statistics.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

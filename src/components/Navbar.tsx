@@ -1,6 +1,7 @@
 import React from 'react';
 import { Plus, User as UserIcon } from 'lucide-react';
 import { ViewTab, User } from '../types';
+import { TasklyLogo } from './TasklyLogo';
 
 interface NavbarProps {
   currentTab: ViewTab;
@@ -25,16 +26,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-8 px-4 sm:px-6 lg:px-8 h-16">
         {/* Zone 1: Single Brand Wordmark */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-mono font-bold text-white shadow-sm">
-            TP
-          </div>
-          <button
-            onClick={() => onSelectTab('tasks')}
-            className="text-lg font-bold tracking-tight text-white hover:text-indigo-300 transition-colors whitespace-nowrap shrink-0 focus:outline-none cursor-pointer"
-          >
-            TaskPulse
-          </button>
+        <div className="flex items-center shrink-0">
+          <TasklyLogo size="md" theme="dark" onClick={() => onSelectTab('tasks')} />
         </div>
 
         {/* Zone 2: Navigation Links (Pure production task/habit links - NO Java OOP tab) */}

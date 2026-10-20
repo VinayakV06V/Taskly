@@ -28,6 +28,12 @@ interface ProfileModalProps {
 
 export const PRESET_AVATARS = [
   {
+    id: 'taskly-logo',
+    name: 'Taskly Emblem',
+    category: 'Featured',
+    url: '/assets/taskly-logo.png',
+  },
+  {
     id: 'default',
     name: 'Current Default',
     category: 'Featured',
