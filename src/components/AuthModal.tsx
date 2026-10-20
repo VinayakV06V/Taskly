@@ -16,14 +16,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onSuccess,
   canDismiss = true,
 }) => {
-  if (!isOpen) return null;
-
   const [mode, setMode] = useState<'signin' | 'register'>('signin');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,12 +49,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         body: JSON.stringify(body),
       });
 
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        setError('Server communication error. Please try again.');
+        return;
+      }
+
       const data = await res.json();
       if (!res.ok || !data.success) {
         setError(data.error || 'Authentication failed. Please verify credentials.');
         return;
       }
 
+      localStorage.setItem('taskly_token', data.token);
       localStorage.setItem('taskpulse_token', data.token);
       onSuccess(data.user, data.token);
     } catch {
@@ -69,8 +76,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     try {
       const res = await fetch('/api/auth/guest-login', { method: 'POST' });
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        setError('Server communication error. Please try again.');
+        return;
+      }
+
       const data = await res.json();
       if (data.success) {
+        localStorage.setItem('taskly_token', data.token);
         localStorage.setItem('taskpulse_token', data.token);
         onSuccess(data.user, data.token);
       } else {

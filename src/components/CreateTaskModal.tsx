@@ -23,24 +23,24 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   onClose,
   onCreate,
 }) => {
-  if (!isOpen) return null;
-
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(18, 0, 0, 0);
-
   const pad = (n: number) => (n < 10 ? '0' + n : '' + n);
-  const defaultDeadline = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}T${pad(tomorrow.getHours())}:${pad(tomorrow.getMinutes())}`;
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<Priority>('MEDIUM');
   const [category, setCategory] = useState('Design');
   const [customCategory, setCustomCategory] = useState('');
-  const [deadline, setDeadline] = useState(defaultDeadline);
+  const [deadline, setDeadline] = useState(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(18, 0, 0, 0);
+    return `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}T${pad(tomorrow.getHours())}:${pad(tomorrow.getMinutes())}`;
+  });
   const [frequency, setFrequency] = useState<RecurrenceFrequency>('NONE');
   const [interval, setInterval] = useState(1);
   const [error, setError] = useState<string | null>(null);
+
+  if (!isOpen) return null;
 
   const setPresetDeadline = (hoursFromNow: number) => {
     const d = new Date(Date.now() + hoursFromNow * 3600 * 1000);
@@ -61,7 +61,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       description: description.trim(),
       priority,
       category: finalCategory,
-      deadline: deadline ? `${deadline}:00` : `${defaultDeadline}:00`,
+      deadline: deadline ? (deadline.length === 16 ? `${deadline}:00` : deadline) : new Date().toISOString(),
       recurrence: {
         frequency,
         interval: Math.max(1, interval),

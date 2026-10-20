@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Check, Sliders, Palette, Layout, Bell, Sparkles, RefreshCw } from 'lucide-react';
 
 export interface WebsiteCustomizationSettings {
@@ -53,11 +53,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
   onSaveSettings,
 }) => {
-  if (!isOpen) return null;
-
   const [localSettings, setLocalSettings] = useState<WebsiteCustomizationSettings>(settings);
   const [activeTab, setActiveTab] = useState<'elements' | 'theme' | 'preferences'>('elements');
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Sync state whenever settings prop updates
+  useEffect(() => {
+    setLocalSettings(settings);
+  }, [settings]);
+
+  if (!isOpen) return null;
 
   const handleToggle = (key: keyof WebsiteCustomizationSettings) => {
     setLocalSettings((prev) => ({

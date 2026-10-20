@@ -139,13 +139,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   onUpdateProfile,
   onLogout,
 }) => {
-  if (!isOpen || !user) return null;
-
   const [activeTab, setActiveTab] = useState<'info' | 'avatars'>('info');
-  const [name, setName] = useState(user.name);
-  const [bio, setBio] = useState(user.bio || '');
+  const [name, setName] = useState(user?.name || '');
+  const [bio, setBio] = useState(user?.bio || '');
   const [avatarUrl, setAvatarUrl] = useState(
-    user.avatarUrl || '/src/assets/images/user_avatar_1792407645930.jpg'
+    user?.avatarUrl || '/src/assets/images/user_avatar_1792407645930.jpg'
   );
   const [customUrlInput, setCustomUrlInput] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -163,6 +161,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setAvatarUrl(user.avatarUrl || '/src/assets/images/user_avatar_1792407645930.jpg');
     }
   }, [user]);
+
+  if (!isOpen || !user) return null;
 
   // Handle local image file upload (converts to base64 DataURL)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

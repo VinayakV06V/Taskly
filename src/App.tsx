@@ -17,10 +17,26 @@ import { SettingsModal, WebsiteCustomizationSettings, DEFAULT_CUSTOM_SETTINGS } 
 import { UserAlarm } from './components/ClockAlarmWidget';
 import { X } from 'lucide-react';
 
+// Safe JSON parser that checks Content-Type and handles non-JSON / HTML responses gracefully
+async function safeJson<T = any>(res: Response): Promise<T | null> {
+  try {
+    const contentType = res.headers.get('content-type') || '';
+    if (!res.ok || !contentType.includes('application/json')) {
+      return null;
+    }
+    return (await res.json()) as T;
+  } catch (err) {
+    console.warn('Network response is not valid JSON:', err);
+    return null;
+  }
+}
+
 export default function App() {
   const [currentTab, setCurrentTab] = useState<ViewTab>('dashboard');
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('taskpulse_token'));
+  const [token, setToken] = useState<string | null>(
+    () => localStorage.getItem('taskly_token') || localStorage.getItem('taskpulse_token')
+  );
   const [tasks, setTasks] = useState<Task[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [stats, setStats] = useState<SystemStatistics | null>(null);
@@ -94,10 +110,10 @@ export default function App() {
     showToast('New reminder notification received', 'info');
   };
 
-  const handleAlarmTriggered = (alarm: UserAlarm) => {
+  const handleAlarmTriggered = useCallback((alarm: UserAlarm) => {
     addNotification('⏰ Alarm Triggered', `Reminder: ${alarm.label} at ${alarm.time}`, 'alert');
     showToast(`⏰ Alarm: ${alarm.label} (${alarm.time})`, 'alert');
-  };
+  }, [addNotification]);
 
   const handleSaveCustomSettings = (newSettings: WebsiteCustomizationSettings) => {
     setCustomSettings(newSettings);
@@ -128,10 +144,11 @@ export default function App() {
       const res = await fetch('/api/auth/me', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.ok) {
-        const data = await res.json();
+      const data = await safeJson<{ success: boolean; user: User }>(res);
+      if (data && data.success && data.user) {
         setUser(data.user);
       } else {
+        localStorage.removeItem('taskly_token');
         localStorage.removeItem('taskpulse_token');
         setToken(null);
         setUser(null);
@@ -164,24 +181,27 @@ export default function App() {
         fetch('/api/tasks', { headers }),
         fetch('/api/habits', { headers }),
         fetch('/api/stats', { headers }),
-        fetch('/api/alerts/overdue', { headers }),
+        fetch('/api/alerts', { headers }),
       ]);
 
-      if (tasksRes.ok) {
-        const data = await tasksRes.json();
-        setTasks(data.tasks || []);
+      const [tasksData, habitsData, statsData, alertsData] = await Promise.all([
+        safeJson<{ success: boolean; tasks: Task[] }>(tasksRes),
+        safeJson<{ success: boolean; habits: Habit[] }>(habitsRes),
+        safeJson<{ success: boolean; stats: SystemStatistics }>(statsRes),
+        safeJson<{ success: boolean; alerts: OverdueAlert[] }>(alertsRes),
+      ]);
+
+      if (tasksData?.tasks) {
+        setTasks(tasksData.tasks);
       }
-      if (habitsRes.ok) {
-        const data = await habitsRes.json();
-        setHabits(data.habits || []);
+      if (habitsData?.habits) {
+        setHabits(habitsData.habits);
       }
-      if (statsRes.ok) {
-        const data = await statsRes.json();
-        setStats(data.stats);
+      if (statsData?.stats) {
+        setStats(statsData.stats);
       }
-      if (alertsRes.ok) {
-        const data = await alertsRes.json();
-        setAlerts(data.alerts || []);
+      if (alertsData?.alerts) {
+        setAlerts(alertsData.alerts);
       }
     } catch (err) {
       console.error('Failed to fetch data:', err);
@@ -211,6 +231,8 @@ export default function App() {
   const handleAuthSuccess = (authenticatedUser: User, authToken: string) => {
     setUser(authenticatedUser);
     setToken(authToken);
+    localStorage.setItem('taskly_token', authToken);
+    localStorage.setItem('taskpulse_token', authToken);
     setIsAuthModalOpen(false);
     showToast(`Welcome back, ${authenticatedUser.name.split(' ')[0]}!`, 'success');
   };
@@ -226,6 +248,7 @@ export default function App() {
         console.error(e);
       }
     }
+    localStorage.removeItem('taskly_token');
     localStorage.removeItem('taskpulse_token');
     setToken(null);
     setUser(null);
@@ -247,8 +270,8 @@ export default function App() {
         headers: getAuthHeaders(),
         body: JSON.stringify({ name, bio, avatarUrl })
       });
-      if (res.ok) {
-        const data = await res.json();
+      const data = await safeJson<{ success: boolean; user: User }>(res);
+      if (data && data.success && data.user) {
         setUser(data.user);
         showToast('Profile & avatar updated successfully', 'success');
         addNotification('Profile Updated', 'Your profile details and avatar were saved.', 'success');
@@ -283,8 +306,8 @@ export default function App() {
         method: 'PATCH',
         headers: getAuthHeaders()
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await safeJson<{ success: boolean; task: Task; spawnedTask?: Task }>(res);
+      if (data && data.success) {
         if (data.spawnedTask) {
           showToast(`Completed! Spawned next recurring task: "${data.spawnedTask.title}"`, 'success');
           addNotification('Recurring Task Spawned', `Next cycle generated for "${data.spawnedTask.title}".`, 'info');
@@ -369,13 +392,13 @@ export default function App() {
         headers: getAuthHeaders(),
         body: JSON.stringify(taskData)
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await safeJson<{ success: boolean; task: Task; error?: string }>(res);
+      if (data && data.success && data.task) {
         showToast(`Added task: "${data.task.title}"`, 'success');
         addNotification('New Task Created', `"${data.task.title}" added to your sprint queue.`, 'success');
         fetchData();
       } else {
-        showToast(data.error || 'Failed to add task', 'alert');
+        showToast(data?.error || 'Failed to add task', 'alert');
       }
     } catch (err) {
       console.error('Failed to create task:', err);
@@ -433,8 +456,8 @@ export default function App() {
         headers: getAuthHeaders(),
         body: JSON.stringify({ date: dateStr })
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await safeJson<{ success: boolean; habit: Habit }>(res);
+      if (data && data.success) {
         showToast('Habit check-in recorded 🔥', 'success');
         if (targetHabit) {
           addNotification('Habit Check-in', `Streak updated for habit "${targetHabit.title}".`, 'success');
@@ -483,8 +506,8 @@ export default function App() {
         headers: getAuthHeaders(),
         body: JSON.stringify(habitData)
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await safeJson<{ success: boolean; habit: Habit }>(res);
+      if (data && data.success && data.habit) {
         showToast(`Added habit: "${data.habit.title}"`, 'success');
         addNotification('New Habit Formed', `"${data.habit.title}" added to daily routine.`, 'success');
         fetchData();
@@ -590,154 +613,94 @@ export default function App() {
               <p className="text-xs text-slate-500 font-medium">Loading workspace...</p>
             </div>
           ) : (
-            <>
-              {currentTab === 'dashboard' && (
-                <div className="flex flex-col xl:flex-row items-start gap-6 w-full">
-                  {/* Center Panel */}
-                  <div className="flex-1 min-w-0 w-full">
-                    <DashboardOverview
-                      tasks={filteredTasks}
-                      stats={stats}
-                      onToggleTask={handleToggleTask}
-                      onDeleteTask={handleDeleteTask}
-                      onSnoozeTask={handleSnoozeTask}
-                      onOpenCreateModal={() => {
-                        if (!user) setIsAuthModalOpen(true);
-                        else setIsTaskModalOpen(true);
-                      }}
-                      onNavigateToTasks={() => setCurrentTab('tasks')}
-                      selectedDateFilter={selectedDateFilter}
-                      settings={customSettings}
-                    />
-                  </div>
-
-                  {/* Right Rail Panel */}
-                  <RightPanel
-                    user={user}
-                    tasks={tasks}
+            <div className="flex flex-col xl:flex-row items-start gap-6 w-full">
+              <div className="flex-1 min-w-0 w-full">
+                {currentTab === 'dashboard' && (
+                  <DashboardOverview
+                    tasks={filteredTasks}
                     stats={stats}
-                    notifications={notifications}
-                    onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
-                    onClearNotifications={handleClearNotifications}
-                    onSendTestNotification={handleSendTestNotification}
-                    onDismissNotification={handleDismissNotification}
-                    onOpenProfile={() => setIsProfileModalOpen(true)}
-                    onSelectDateFilter={setSelectedDateFilter}
+                    onToggleTask={handleToggleTask}
+                    onDeleteTask={handleDeleteTask}
+                    onSnoozeTask={handleSnoozeTask}
+                    onOpenCreateModal={() => {
+                      if (!user) setIsAuthModalOpen(true);
+                      else setIsTaskModalOpen(true);
+                    }}
+                    onNavigateToTasks={() => setCurrentTab('tasks')}
                     selectedDateFilter={selectedDateFilter}
-                    onAlarmTriggered={handleAlarmTriggered}
                     settings={customSettings}
                   />
-                </div>
-              )}
+                )}
 
-              {currentTab === 'kanban' && (
-                <div className="flex flex-col xl:flex-row items-start gap-6 w-full">
-                  <div className="flex-1 min-w-0 w-full">
-                    <KanbanBoard
-                      tasks={filteredTasks}
-                      onToggleTask={handleToggleTask}
-                      onDeleteTask={handleDeleteTask}
-                      onOpenCreateModal={() => {
-                        if (!user) setIsAuthModalOpen(true);
-                        else setIsTaskModalOpen(true);
-                      }}
-                    />
-                  </div>
-                  <RightPanel
-                    user={user}
-                    tasks={tasks}
-                    stats={stats}
-                    notifications={notifications}
-                    onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
-                    onClearNotifications={handleClearNotifications}
-                    onSendTestNotification={handleSendTestNotification}
-                    onDismissNotification={handleDismissNotification}
-                    onOpenProfile={() => setIsProfileModalOpen(true)}
-                    onSelectDateFilter={setSelectedDateFilter}
-                    selectedDateFilter={selectedDateFilter}
-                    onAlarmTriggered={handleAlarmTriggered}
-                    settings={customSettings}
+                {currentTab === 'kanban' && (
+                  <KanbanBoard
+                    tasks={filteredTasks}
+                    onToggleTask={handleToggleTask}
+                    onDeleteTask={handleDeleteTask}
+                    onOpenCreateModal={() => {
+                      if (!user) setIsAuthModalOpen(true);
+                      else setIsTaskModalOpen(true);
+                    }}
                   />
-                </div>
-              )}
+                )}
 
-              {currentTab === 'tasks' && (
-                <div className="flex flex-col xl:flex-row items-start gap-6 w-full">
-                  <div className="flex-1 min-w-0 w-full">
-                    <TaskBoard
-                      tasks={filteredTasks}
-                      onToggleTask={handleToggleTask}
-                      onDeleteTask={handleDeleteTask}
-                      onSnoozeTask={handleSnoozeTask}
-                      onOpenCreateModal={() => {
-                        if (!user) setIsAuthModalOpen(true);
-                        else setIsTaskModalOpen(true);
-                      }}
-                      onQuickAddTask={handleQuickAddTask}
-                    />
-                  </div>
-                  <RightPanel
-                    user={user}
-                    tasks={tasks}
-                    stats={stats}
-                    notifications={notifications}
-                    onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
-                    onClearNotifications={handleClearNotifications}
-                    onSendTestNotification={handleSendTestNotification}
-                    onDismissNotification={handleDismissNotification}
-                    onOpenProfile={() => setIsProfileModalOpen(true)}
-                    onSelectDateFilter={setSelectedDateFilter}
-                    selectedDateFilter={selectedDateFilter}
-                    onAlarmTriggered={handleAlarmTriggered}
-                    settings={customSettings}
+                {currentTab === 'tasks' && (
+                  <TaskBoard
+                    tasks={filteredTasks}
+                    onToggleTask={handleToggleTask}
+                    onDeleteTask={handleDeleteTask}
+                    onSnoozeTask={handleSnoozeTask}
+                    onOpenCreateModal={() => {
+                      if (!user) setIsAuthModalOpen(true);
+                      else setIsTaskModalOpen(true);
+                    }}
+                    onQuickAddTask={handleQuickAddTask}
                   />
-                </div>
-              )}
+                )}
 
-              {currentTab === 'habits' && (
-                <div className="flex flex-col xl:flex-row items-start gap-6 w-full">
-                  <div className="flex-1 min-w-0 w-full">
-                    <HabitTrackerView
-                      habits={habits}
-                      onToggleHabitDate={handleToggleHabitDate}
-                      onDeleteHabit={handleDeleteHabit}
-                      onOpenCreateHabitModal={() => {
-                        if (!user) setIsAuthModalOpen(true);
-                        else setIsHabitModalOpen(true);
-                      }}
-                    />
-                  </div>
-                  <RightPanel
-                    user={user}
-                    tasks={tasks}
-                    stats={stats}
-                    notifications={notifications}
-                    onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
-                    onClearNotifications={handleClearNotifications}
-                    onSendTestNotification={handleSendTestNotification}
-                    onDismissNotification={handleDismissNotification}
-                    onOpenProfile={() => setIsProfileModalOpen(true)}
-                    onSelectDateFilter={setSelectedDateFilter}
-                    selectedDateFilter={selectedDateFilter}
-                    onAlarmTriggered={handleAlarmTriggered}
-                    settings={customSettings}
+                {currentTab === 'habits' && (
+                  <HabitTrackerView
+                    habits={habits}
+                    onToggleHabitDate={handleToggleHabitDate}
+                    onDeleteHabit={handleDeleteHabit}
+                    onOpenCreateHabitModal={() => {
+                      if (!user) setIsAuthModalOpen(true);
+                      else setIsHabitModalOpen(true);
+                    }}
                   />
-                </div>
-              )}
+                )}
 
-              {currentTab === 'analytics' && (
-                <AnalyticsView stats={stats} />
-              )}
+                {currentTab === 'analytics' && (
+                  <AnalyticsView stats={stats} />
+                )}
 
-              {currentTab === 'alerts' && (
-                <OverdueAlertsView
-                  alerts={alerts}
-                  onToggleTask={handleToggleTask}
-                  onSnoozeTask={handleSnoozeTask}
-                  onNavigateToTasks={() => setCurrentTab('tasks')}
-                />
-              )}
-            </>
+                {currentTab === 'alerts' && (
+                  <OverdueAlertsView
+                    alerts={alerts}
+                    onToggleTask={handleToggleTask}
+                    onSnoozeTask={handleSnoozeTask}
+                    onNavigateToTasks={() => setCurrentTab('tasks')}
+                  />
+                )}
+              </div>
+
+              {/* Persistent Right Rail Panel */}
+              <RightPanel
+                user={user}
+                tasks={tasks}
+                stats={stats}
+                notifications={notifications}
+                onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+                onClearNotifications={handleClearNotifications}
+                onSendTestNotification={handleSendTestNotification}
+                onDismissNotification={handleDismissNotification}
+                onOpenProfile={() => setIsProfileModalOpen(true)}
+                onSelectDateFilter={setSelectedDateFilter}
+                selectedDateFilter={selectedDateFilter}
+                onAlarmTriggered={handleAlarmTriggered}
+                settings={customSettings}
+              />
+            </div>
           )}
         </main>
 
@@ -769,41 +732,51 @@ export default function App() {
         </div>
       )}
 
-      {/* Modals */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        onSuccess={handleAuthSuccess}
-        canDismiss={Boolean(user)}
-      />
+      {/* Modals rendered when opened */}
+      {isAuthModalOpen && (
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          onSuccess={handleAuthSuccess}
+          canDismiss={Boolean(user)}
+        />
+      )}
 
-      <ProfileModal
-        isOpen={isProfileModalOpen}
-        onClose={() => setIsProfileModalOpen(false)}
-        user={user}
-        stats={stats}
-        onUpdateProfile={handleUpdateProfile}
-        onLogout={handleLogout}
-      />
+      {isProfileModalOpen && user && (
+        <ProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+          user={user}
+          stats={stats}
+          onUpdateProfile={handleUpdateProfile}
+          onLogout={handleLogout}
+        />
+      )}
 
-      <SettingsModal
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
-        settings={customSettings}
-        onSaveSettings={handleSaveCustomSettings}
-      />
+      {isSettingsModalOpen && (
+        <SettingsModal
+          isOpen={isSettingsModalOpen}
+          onClose={() => setIsSettingsModalOpen(false)}
+          settings={customSettings}
+          onSaveSettings={handleSaveCustomSettings}
+        />
+      )}
 
-      <CreateTaskModal
-        isOpen={isTaskModalOpen}
-        onClose={() => setIsTaskModalOpen(false)}
-        onCreate={handleCreateTask}
-      />
+      {isTaskModalOpen && (
+        <CreateTaskModal
+          isOpen={isTaskModalOpen}
+          onClose={() => setIsTaskModalOpen(false)}
+          onCreate={handleCreateTask}
+        />
+      )}
 
-      <CreateHabitModal
-        isOpen={isHabitModalOpen}
-        onClose={() => setIsHabitModalOpen(false)}
-        onCreate={handleCreateHabit}
-      />
+      {isHabitModalOpen && (
+        <CreateHabitModal
+          isOpen={isHabitModalOpen}
+          onClose={() => setIsHabitModalOpen(false)}
+          onCreate={handleCreateHabit}
+        />
+      )}
     </div>
   );
 }

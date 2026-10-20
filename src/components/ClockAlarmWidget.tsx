@@ -65,6 +65,11 @@ export const ClockAlarmWidget: React.FC<ClockAlarmWidgetProps> = ({
   const [alarmLabelInput, setAlarmLabelInput] = useState('');
   const [ringingAlarm, setRingingAlarm] = useState<UserAlarm | null>(null);
 
+  const alarmsRef = useRef<UserAlarm[]>(alarms);
+  alarmsRef.current = alarms;
+  const onAlarmTriggeredRef = useRef(onAlarmTriggered);
+  onAlarmTriggeredRef.current = onAlarmTriggered;
+
   // Sync alarms to localStorage
   useEffect(() => {
     try {
@@ -72,7 +77,7 @@ export const ClockAlarmWidget: React.FC<ClockAlarmWidgetProps> = ({
     } catch {}
   }, [alarms]);
 
-  // Real-time ticking clock & alarm monitor
+  // Real-time ticking clock & alarm monitor (Mounted once)
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -83,13 +88,13 @@ export const ClockAlarmWidget: React.FC<ClockAlarmWidgetProps> = ({
       const currentHM = `${hoursStr}:${minutesStr}`;
       const todayDateStr = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
 
-      // Check alarms
-      alarms.forEach((alarm) => {
+      // Check alarms against current time
+      alarmsRef.current.forEach((alarm) => {
         if (alarm.enabled && alarm.time === currentHM && alarm.lastFiredDate !== todayDateStr) {
           // Trigger alarm!
           playAlarmChime();
           setRingingAlarm(alarm);
-          onAlarmTriggered(alarm);
+          onAlarmTriggeredRef.current(alarm);
 
           // Update lastFiredDate so it only triggers once per minute
           setAlarms((prev) =>
@@ -100,7 +105,7 @@ export const ClockAlarmWidget: React.FC<ClockAlarmWidgetProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [alarms, onAlarmTriggered]);
+  }, []);
 
   const handleAddAlarm = (e: React.FormEvent) => {
     e.preventDefault();

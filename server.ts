@@ -879,8 +879,8 @@ async function startServer() {
     });
   });
 
-  // GET /api/alerts
-  app.get('/api/alerts', (req: Request, res: Response) => {
+  // GET /api/alerts & /api/alerts/overdue
+  app.get(['/api/alerts', '/api/alerts/overdue'], (req: Request, res: Response) => {
     const userId = getAuthUserId(req);
     const userTasks = userId ? dbStore.tasks.filter((t) => t.userId === userId) : [];
 
@@ -1068,6 +1068,17 @@ async function startServer() {
     res.setHeader('Content-Disposition', 'attachment; filename="task_habit_export.json"');
     res.setHeader('Content-Type', 'application/json');
     res.send(JSON.stringify(exportData, null, 2));
+  });
+
+  // Catch unhandled /api routes and return JSON 404 (prevents Vite HTML SPA fallback)
+  app.all('/api/*', (_req: Request, res: Response) => {
+    res.status(404).json({ success: false, error: 'API endpoint not found' });
+  });
+
+  // Global API error handler ensuring JSON responses
+  app.use((err: any, _req: Request, res: Response, _next: any) => {
+    console.error('API Error:', err);
+    res.status(500).json({ success: false, error: err?.message || 'Internal server error' });
   });
 
   // In development, mount Vite middleware

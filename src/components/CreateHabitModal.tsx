@@ -18,13 +18,13 @@ export const CreateHabitModal: React.FC<CreateHabitModalProps> = ({
   onClose,
   onCreate,
 }) => {
-  if (!isOpen) return null;
-
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('Productivity');
   const [targetDaysPerWeek, setTargetDaysPerWeek] = useState(5);
   const [error, setError] = useState<string | null>(null);
+
+  if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
