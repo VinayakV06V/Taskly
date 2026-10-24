@@ -29,6 +29,26 @@
       "bio": "Focused on disciplined execution and daily habits.",
       "createdAt": "2026-10-19T11:48:42.797Z",
       "role": "USER"
+    },
+    {
+      "id": "usr-1792866501590-zh5u8",
+      "name": "Dev Tester",
+      "email": "devtester_1792866501@gmail.com",
+      "passwordHash": "b926e929192ee30e047ab90fc9d1e0d811a4ccc5f0411da2047abfccc8cd8f60",
+      "avatarUrl": "/src/assets/images/user_avatar_1792407645930.jpg",
+      "bio": "Focused on disciplined execution and daily habits.",
+      "role": "USER",
+      "createdAt": "2026-10-24T18:28:21.590Z"
+    },
+    {
+      "id": "usr-1792866551012-tlrqq",
+      "name": "Supabase Test User",
+      "email": "supabasetest_1792866550@gmail.com",
+      "passwordHash": "d9d8e7ee4e92681edbb144557bbf512c15e51582ed8f4a03dac98e88d1065674",
+      "avatarUrl": "/src/assets/images/user_avatar_1792407645930.jpg",
+      "bio": "Focused on disciplined execution and daily habits.",
+      "role": "USER",
+      "createdAt": "2026-10-24T18:29:11.012Z"
     }
   ],
   "tasks": [
@@ -51,6 +71,39 @@
   ],
   "habits": [],
   "auditLogs": [
+    {
+      "id": "log-1792866551613-db7p",
+      "timestamp": "2026-10-24T18:29:11.613Z",
+      "type": "REGISTER",
+      "userId": "usr-1792866551012-tlrqq",
+      "userName": "Supabase Test User",
+      "userEmail": "supabasetest_1792866550@gmail.com",
+      "ip": "127.0.0.1",
+      "details": "New user registered account & synced to Supabase (Standard Role)",
+      "status": "SUCCESS"
+    },
+    {
+      "id": "log-1792866507724-3oaj",
+      "timestamp": "2026-10-24T18:28:27.724Z",
+      "type": "LOGIN",
+      "userId": "usr-1792866501590-zh5u8",
+      "userName": "Dev Tester",
+      "userEmail": "devtester_1792866501@gmail.com",
+      "ip": "127.0.0.1",
+      "details": "Successful login session opened & synced to Supabase (USER privileges)",
+      "status": "SUCCESS"
+    },
+    {
+      "id": "log-1792866502631-eomi",
+      "timestamp": "2026-10-24T18:28:22.631Z",
+      "type": "REGISTER",
+      "userId": "usr-1792866501590-zh5u8",
+      "userName": "Dev Tester",
+      "userEmail": "devtester_1792866501@gmail.com",
+      "ip": "127.0.0.1",
+      "details": "New user registered account & synced to Supabase (Standard Role)",
+      "status": "SUCCESS"
+    },
     {
       "id": "log-1792411692601-ywim",
       "timestamp": "2026-10-19T12:08:12.601Z",
@@ -122,6 +175,9 @@
     "tok_6687b11e78a8fe26752a3cc9cd5111e1cc103e882f524288": "usr-1792408832591-q23ix",
     "tok_57262b68c16def9fe1937cae560a8a2131cc3aeca1f8188d": "usr-1792410522797-bv39r",
     "tok_944c72315d3769aae400dd305011d1b191e180cf88e515f6": "usr-1792408832591-q23ix",
-    "tok_da1535b600e6247be2c7456060734576158db46657713a59": "usr-guest-1792408915962"
+    "tok_da1535b600e6247be2c7456060734576158db46657713a59": "usr-guest-1792408915962",
+    "tok_d27523d38c5d7367416a10cd3e0465fcf52eca72d147fc86": "usr-1792866501590-zh5u8",
+    "tok_46cd6d3e6efd5ee1527cebf2d18c9c17c871f050ea980291": "usr-1792866501590-zh5u8",
+    "tok_126fc282e34d43804fdea9e6573b5eae55446e839d9c7554": "usr-1792866551012-tlrqq"
   }
 }

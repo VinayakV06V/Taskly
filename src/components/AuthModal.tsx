@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Mail, Lock, User as UserIcon, ArrowRight, X, AlertCircle, Sparkles } from 'lucide-react';
 import { User } from '../types';
 import { TasklyLogo } from './TasklyLogo';
+import { getSupabaseClient } from '../lib/supabase';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -59,6 +60,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (!res.ok || !data.success) {
         setError(data.error || 'Authentication failed. Please verify credentials.');
         return;
+      }
+
+      // Also trigger client-side Supabase sync
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        try {
+          if (mode === 'register') {
+            await supabase.auth.signUp({
+              email,
+              password,
+              options: { data: { name: name.trim() } }
+            });
+            try {
+              await supabase.from('users').upsert({
+                id: data.user.id,
+                email: data.user.email,
+                name: data.user.name,
+                role: data.user.role,
+                created_at: new Date().toISOString()
+              });
+            } catch {
+              // public.users may not exist yet
+            }
+          } else {
+            await supabase.auth.signInWithPassword({ email, password }).catch(() => {});
+          }
+        } catch (sbErr) {
+          console.warn('[Supabase client sync]:', sbErr);
+        }
       }
 
       localStorage.setItem('taskly_token', data.token);

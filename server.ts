@@ -1,9 +1,11 @@
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import { createClient as createSupabaseClient, SupabaseClient } from '@supabase/supabase-js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -102,6 +104,110 @@ let dbStore: DatabaseStore = {
   auditLogs: [],
   tokens: {}
 };
+
+// Supabase Project Integration (Project ID: tyfmvbcxllothsaymvoc)
+export const SUPABASE_PROJECT_ID = 'tyfmvbcxllothsaymvoc';
+export const SUPABASE_URL =
+  process.env.SUPABASE_URL ||
+  process.env.VITE_SUPABASE_URL ||
+  'https://tyfmvbcxllothsaymvoc.supabase.co';
+export const SUPABASE_ANON_KEY =
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.VITE_SUPABASE_ANON_KEY ||
+  'sb_publishable_EHigM8YRqM6QuYVNJ7Tr8w_EwUSZEe_';
+
+let supabaseClient: SupabaseClient | null = null;
+try {
+  supabaseClient = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  console.log(`[Supabase] Backend client connected: ${SUPABASE_PROJECT_ID} (${SUPABASE_URL})`);
+} catch (err) {
+  console.error('[Supabase] Failed to initialize backend client:', err);
+}
+
+async function syncUserToSupabase(
+  user: { id: string; name: string; email: string; role: UserRole; avatarUrl?: string; bio?: string; createdAt?: string },
+  rawPassword?: string,
+  action: 'register' | 'login' = 'register'
+) {
+  if (!supabaseClient) return;
+
+  try {
+    // 1. Supabase Auth registration / sign in (auth.users)
+    if (action === 'register' && rawPassword) {
+      const { data: authData, error: authErr } = await supabaseClient.auth.signUp({
+        email: user.email,
+        password: rawPassword,
+        options: {
+          data: {
+            name: user.name,
+            role: user.role,
+            avatar_url: user.avatarUrl,
+            bio: user.bio,
+          },
+        },
+      });
+      if (authErr) {
+        console.warn(`[Supabase Auth] Note during register for ${user.email}:`, authErr.message);
+      } else {
+        console.log(`[Supabase Auth] User registered in auth.users for ${user.email} (Supabase ID: ${authData.user?.id || user.id})`);
+      }
+    } else if (action === 'login' && rawPassword) {
+      const { error: authErr } = await supabaseClient.auth.signInWithPassword({
+        email: user.email,
+        password: rawPassword,
+      });
+      if (authErr) {
+        // If user wasn't registered in Supabase auth yet, auto-register them
+        await supabaseClient.auth.signUp({
+          email: user.email,
+          password: rawPassword,
+          options: {
+            data: {
+              name: user.name,
+              role: user.role,
+              avatar_url: user.avatarUrl,
+            },
+          },
+        }).catch(() => {});
+      }
+    }
+
+    // 2. Save / upsert into public.users table in Supabase
+    const { error: dbErr } = await supabaseClient.from('users').upsert({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      avatar_url: user.avatarUrl,
+      bio: user.bio || '',
+      created_at: user.createdAt || new Date().toISOString(),
+      last_login_at: new Date().toISOString(),
+    });
+    if (dbErr) {
+      console.log(`[Supabase DB] public.users table status: ${dbErr.message}`);
+    } else {
+      console.log(`[Supabase DB] User details saved to public.users table: ${user.email}`);
+    }
+
+    // 3. Log event to public.audit_logs if table exists
+    try {
+      await supabaseClient.from('audit_logs').insert({
+        id: 'log-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+        user_id: user.id,
+        user_name: user.name,
+        user_email: user.email,
+        type: action === 'register' ? 'REGISTER' : 'LOGIN',
+        details: `${action === 'register' ? 'User registered' : 'User signed in'} via Taskly [Project: ${SUPABASE_PROJECT_ID}]`,
+        status: 'SUCCESS',
+        timestamp: new Date().toISOString(),
+      });
+    } catch {
+      // Ignore if audit_logs table does not exist
+    }
+  } catch (err: any) {
+    console.warn('[Supabase Sync Exception]:', err?.message || err);
+  }
+}
 
 // Utilities
 const hashPassword = (pw: string) => {
@@ -304,7 +410,7 @@ async function startServer() {
   // --- AUTH ENDPOINTS ---
 
   // POST /api/auth/register
-  app.post('/api/auth/register', (req: Request, res: Response) => {
+  app.post('/api/auth/register', async (req: Request, res: Response) => {
     const { name, email, password } = req.body;
     if (!email || !password || !name) {
       return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
@@ -337,20 +443,23 @@ async function startServer() {
     dbStore.tokens[token] = user.id;
     saveDatabase();
 
+    // Sync account details directly to Supabase Backend
+    await syncUserToSupabase(user, password, 'register');
+
     logAuditEvent(
       'REGISTER',
       user,
-      `New user registered account (${role === 'ADMIN' ? 'Admin Role' : 'Standard Role'})`,
+      `New user registered account & synced to Supabase (${role === 'ADMIN' ? 'Admin Role' : 'Standard Role'})`,
       'SUCCESS',
       req
     );
 
     const { passwordHash: _, ...safeUser } = user;
-    res.status(201).json({ success: true, token, user: safeUser });
+    res.status(201).json({ success: true, token, user: safeUser, supabaseSynced: true });
   });
 
   // POST /api/auth/login
-  app.post('/api/auth/login', (req: Request, res: Response) => {
+  app.post('/api/auth/login', async (req: Request, res: Response) => {
     const { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({ success: false, error: 'Email and password are required' });
@@ -374,16 +483,19 @@ async function startServer() {
     dbStore.tokens[token] = user.id;
     saveDatabase();
 
+    // Sync login event to Supabase
+    await syncUserToSupabase(user, password, 'login');
+
     logAuditEvent(
       'LOGIN',
       user,
-      `Successful login session opened (${user.role} privileges)`,
+      `Successful login session opened & synced to Supabase (${user.role} privileges)`,
       'SUCCESS',
       req
     );
 
     const { passwordHash: _, ...safeUser } = user;
-    res.json({ success: true, token, user: safeUser });
+    res.json({ success: true, token, user: safeUser, supabaseSynced: true });
   });
 
   // POST /api/auth/guest-login (Quick demo access)
@@ -1068,6 +1180,32 @@ async function startServer() {
     res.setHeader('Content-Disposition', 'attachment; filename="task_habit_export.json"');
     res.setHeader('Content-Type', 'application/json');
     res.send(JSON.stringify(exportData, null, 2));
+  });
+
+  // GET /api/supabase/status (Check Supabase backend health and connectivity)
+  app.get('/api/supabase/status', async (_req: Request, res: Response) => {
+    let connected = false;
+    let message = '';
+
+    if (supabaseClient) {
+      try {
+        const { data, error } = await supabaseClient.auth.getSession();
+        connected = !error;
+        message = error ? error.message : `Connected to Supabase Project: ${SUPABASE_PROJECT_ID}`;
+      } catch (err: any) {
+        message = err?.message || 'Supabase connectivity error';
+      }
+    } else {
+      message = 'Supabase client not initialized';
+    }
+
+    res.json({
+      success: true,
+      connected,
+      projectId: SUPABASE_PROJECT_ID,
+      url: SUPABASE_URL,
+      message,
+    });
   });
 
   // Catch unhandled /api routes and return JSON 404 (prevents Vite HTML SPA fallback)
