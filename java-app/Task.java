@@ -4,12 +4,37 @@ import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 /**
+ * ==============================================================================
  * Task.java
- * Core domain entity representing a deadline-driven action item.
- * Demonstrates Object-Oriented Principles: Encapsulation, abstraction,
- * Comparable interface for sorting, and Java 8+ Date-Time API.
+ * ==============================================================================
+ * 
+ * CONCEPTS DEMONSTRATED:
+ * 
+ * 1. OBJECT-ORIENTED PROGRAMMING (OOP):
+ *    - Encapsulation: All state fields (id, title, priority, deadline, isCompleted)
+ *      are private and accessed only through controlled public getters/setters.
+ *    - Composition ("has-a" relationship): A Task has-a Priority enum and has-a
+ *      RecurrenceRule object.
+ *    - Interface & Polymorphism: Implements Comparable<Task> to provide standard
+ *      natural sorting behavior.
+ * 
+ * 2. SORTING (Comparable<Task>):
+ *    - By implementing Comparable<Task>, Task objects can be sorted directly
+ *      using Collections.sort(taskList) or ArrayList.sort() without additional comparator code.
+ *    - Natural Order: Earliest deadline first (chronological order).
+ * 
+ * 3. JAVA 8+ DATE-TIME API (java.time.LocalDateTime & java.time.Duration):
+ *    - LocalDateTime provides accurate timestamp comparisons (e.g., .isAfter() for overdue detection).
+ *    - Duration.between() calculates exact hours remaining until or past a deadline.
+ *    - DateTimeFormatter formats dates cleanly into human-readable strings.
+ * 
+ * 4. PUBLIC API & BUSINESS LOGIC:
+ *    - toggleComplete(): Marks completion and spawns the next recurring instance automatically.
+ *    - isOverdue(): Real-time evaluation against current system clock.
  */
 public class Task implements Comparable<Task> {
+
+    // --- ENCAPSULATED PRIVATE FIELDS (OOP) ---
     private final String id;
     private String title;
     private String description;
@@ -21,55 +46,79 @@ public class Task implements Comparable<Task> {
     private final LocalDateTime createdAt;
     private RecurrenceRule recurrence;
 
+    // --- CONSTRUCTORS (OOP Overloading for Convenience) ---
+
+    /**
+     * Convenience Constructor: Defaults to a randomly generated UUID and non-recurring rule.
+     */
     public Task(String title, String description, Priority priority, String category, LocalDateTime deadline) {
         this(UUID.randomUUID().toString(), title, description, priority, category, deadline, new RecurrenceRule());
     }
 
+    /**
+     * Full Constructor: Initializes all core properties with safe fallbacks.
+     */
     public Task(String id, String title, String description, Priority priority, String category, LocalDateTime deadline, RecurrenceRule recurrence) {
-        this.id = id != null ? id : UUID.randomUUID().toString();
-        this.title = title;
-        this.description = description != null ? description : "";
+        this.id = (id != null && !id.trim().isEmpty()) ? id : UUID.randomUUID().toString();
+        this.title = title != null ? title.trim() : "Untitled Task";
+        this.description = description != null ? description.trim() : "";
         this.priority = priority != null ? priority : Priority.MEDIUM;
-        this.category = category != null && !category.trim().isEmpty() ? category : "General";
+        this.category = (category != null && !category.trim().isEmpty()) ? category.trim() : "General";
         this.deadline = deadline;
         this.isCompleted = false;
         this.completedAt = null;
-        this.createdAt = LocalDateTime.now();
+        this.createdAt = LocalDateTime.now(); // Date-Time API: capture current creation timestamp
         this.recurrence = recurrence != null ? recurrence : new RecurrenceRule();
     }
 
-    // Getters and Setters
+    // --- GETTERS AND SETTERS (OOP Encapsulation Accessors) ---
+
     public String getId() { return id; }
+    
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
+    
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+    
     public Priority getPriority() { return priority; }
     public void setPriority(Priority priority) { this.priority = priority; }
+    
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
+    
     public LocalDateTime getDeadline() { return deadline; }
     public void setDeadline(LocalDateTime deadline) { this.deadline = deadline; }
+    
     public boolean isCompleted() { return isCompleted; }
     public LocalDateTime getCompletedAt() { return completedAt; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    
     public RecurrenceRule getRecurrence() { return recurrence; }
     public void setRecurrence(RecurrenceRule recurrence) { this.recurrence = recurrence; }
 
+    // --- PUBLIC API BUSINESS METHODS ---
+
     /**
+     * BUSINESS LOGIC & API METHOD:
      * Toggles task completion state.
-     * If the task is recurring and being marked complete, returns a newly scheduled Task.
+     * If marking complete on a recurring task, calculates next due date and returns
+     * a newly scheduled Task instance for continuous habit/workflow automation.
+     * 
+     * @return Newly scheduled recurring Task if applicable, or null if non-recurring or re-opened.
      */
     public Task toggleComplete() {
         if (!this.isCompleted) {
             this.isCompleted = true;
-            this.completedAt = LocalDateTime.now();
+            this.completedAt = LocalDateTime.now(); // Date-Time API: stamp completion time
 
+            // If recurring, spawn the subsequent cycle
             if (this.recurrence != null && this.recurrence.isRecurring()) {
                 LocalDateTime nextDue = this.recurrence.calculateNextDueDate(this.deadline);
-                return new Task(this.title, this.description, this.priority, this.category, nextDue);
+                return new Task(this.title, this.description, this.priority, this.category, nextDue, this.recurrence);
             }
         } else {
+            // Re-open completed task
             this.isCompleted = false;
             this.completedAt = null;
         }
@@ -77,7 +126,9 @@ public class Task implements Comparable<Task> {
     }
 
     /**
-     * Checks if task is past due using Date-Time comparison.
+     * DATE-TIME API USAGE:
+     * Checks if current time has passed the deadline for pending tasks.
+     * Uses LocalDateTime.now().isAfter(deadline).
      */
     public boolean isOverdue() {
         if (isCompleted || deadline == null) {
@@ -87,21 +138,29 @@ public class Task implements Comparable<Task> {
     }
 
     /**
-     * Calculates duration in hours until or past deadline.
+     * DATE-TIME API USAGE (Duration):
+     * Calculates hours remaining until deadline, or negative hours if overdue.
      */
     public long getHoursRemaining() {
         if (deadline == null) return 0;
         return Duration.between(LocalDateTime.now(), deadline).toHours();
     }
 
+    // --- SORTING IMPLEMENTATION (Comparable<Task>) ---
+
     /**
-     * Default natural ordering by deadline (earliest deadline first).
+     * SORTING CONCEPT:
+     * Natural Ordering: Earliest deadline first.
+     * Returns:
+     *   negative if this task's deadline is before other's deadline
+     *   zero if both deadlines are equal
+     *   positive if this task's deadline is after other's deadline
      */
     @Override
     public int compareTo(Task other) {
         if (other == null) return 1;
         if (this.deadline == null && other.deadline == null) return 0;
-        if (this.deadline == null) return 1;
+        if (this.deadline == null) return 1; // Tasks without deadlines go to the end
         if (other.deadline == null) return -1;
         return this.deadline.compareTo(other.deadline);
     }
