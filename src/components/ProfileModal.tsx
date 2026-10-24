@@ -40,6 +40,18 @@ export const PRESET_AVATARS = [
     url: '/src/assets/images/user_avatar_1792407645930.jpg',
   },
   {
+    id: 'migrated-brand-icon',
+    name: 'Brand Icon',
+    category: 'Featured',
+    url: '/.images/media_1792514173608_ba2ece32.jpg',
+  },
+  {
+    id: 'migrated-dashboard-art',
+    name: 'Workspace Art',
+    category: 'Featured',
+    url: '/.images/media_1792514788726_e7a14098.png',
+  },
+  {
     id: 'adv-felix',
     name: 'Felix Explorer',
     category: '3D & Characters',

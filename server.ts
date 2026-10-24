@@ -1081,6 +1081,9 @@ async function startServer() {
     res.status(500).json({ success: false, error: err?.message || 'Internal server error' });
   });
 
+  // Serve migrated assets from .images folder with dotfiles enabled
+  app.use('/.images', express.static(path.resolve(__dirname, '.images'), { dotfiles: 'allow' }));
+
   // In development, mount Vite middleware
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

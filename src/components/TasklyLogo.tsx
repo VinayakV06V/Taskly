@@ -38,8 +38,8 @@ export const TasklyLogo: React.FC<TasklyLogoProps> = ({
           alt="Taskly Logo"
           className="w-full h-full object-contain"
           onError={(e) => {
-            // Fallback to original user asset if needed
-            (e.target as HTMLImageElement).src = '/assets/aistudio/WhatsApp_Image_2026-10-19_at_5.45.33_PM__1__c8808754.jpeg';
+            // Fallback to migrated user asset from .images
+            (e.target as HTMLImageElement).src = '/.images/media_1792514173608_ba2ece32.jpg';
           }}
         />
       </div>
